@@ -457,11 +457,11 @@ namespace Microsoft.AspNet.Hosting
             return new WebHostBuilder(config ?? new ConfigurationBuilder().Build());
         }
 
-        public void Start(RequestDelegate requestDelegate)
+        public void Start(IHttpApplication app)
         {
-            var startInstance = new StartInstance(requestDelegate);
+            var startInstance = new StartInstance(app.InvokeAsync);
             _startInstances.Add(startInstance);
-            requestDelegate(new DefaultHttpContext(Features));
+            app.InvokeAsync(new DefaultHttpContext(Features));
         }
 
         public void Dispose()

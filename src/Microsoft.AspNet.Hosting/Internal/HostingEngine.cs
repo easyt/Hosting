@@ -3,10 +3,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using Microsoft.AspNet.Builder;
 using Microsoft.AspNet.Hosting.Builder;
 using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Hosting.Startup;
@@ -43,6 +41,8 @@ namespace Microsoft.AspNet.Hosting.Internal
         internal IServerFactory ServerFactory { get; set; }
         internal string ServerFactoryLocation { get; set; }
         internal IServer Server { get; set; }
+
+        internal IHttpApplication App { get; set; }
 
         public HostingEngine(
             IServiceCollection appServices,
@@ -89,48 +89,10 @@ namespace Microsoft.AspNet.Hosting.Internal
             var application = BuildApplication();
 
             var logger = _applicationServices.GetRequiredService<ILogger<HostingEngine>>();
-            var diagnosticSource = _applicationServices.GetRequiredService<DiagnosticSource>();
 
             logger.Starting();
 
-            Server.Start(
-                async httpContext =>
-                {
-                    httpContext.ApplicationServices = _applicationServices;
-
-                    if (diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.BeginRequest"))
-                    {
-                        diagnosticSource.Write("Microsoft.AspNet.Hosting.BeginRequest", new { httpContext = httpContext });
-                    }
-
-                    using (logger.RequestScope(httpContext))
-                    {
-                        int startTime = 0;
-                        try
-                        {
-                            logger.RequestStarting(httpContext);
-
-                            startTime = Environment.TickCount;
-                            await application(httpContext);
-
-                            logger.RequestFinished(httpContext, startTime);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.RequestFailed(httpContext, startTime);
-
-                            if (diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.UnhandledException"))
-                            {
-                                diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext = httpContext, exception = ex });
-                            }
-                            throw;
-                        }
-                    }
-                    if (diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.EndRequest"))
-                    {
-                        diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext = httpContext });
-                    }
-                });
+            Server.Start(App ?? new HostingApplication(_applicationServices, application));
 
             _applicationLifetime.NotifyStarted();
             logger.Started();

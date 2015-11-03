@@ -138,9 +138,9 @@ namespace Microsoft.AspNet.TestHost
             _appInstance.Dispose();
         }
 
-        void IServer.Start(RequestDelegate requestDelegate)
+        void IServer.Start(IHttpApplication app)
         {
-            _appDelegate = requestDelegate;
+            _appDelegate = app.InvokeAsync;
         }
     }
 }

@@ -174,9 +174,9 @@ namespace Microsoft.AspNet.Hosting
 
             }
 
-            public void Start(RequestDelegate requestDelegate)
+            public void Start(IHttpApplication app)
             {
-                RequestDelegate = requestDelegate;
+                RequestDelegate = app.InvokeAsync;
             }
         }
     }
