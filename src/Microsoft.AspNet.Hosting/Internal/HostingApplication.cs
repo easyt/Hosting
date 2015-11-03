@@ -15,9 +15,9 @@ namespace Microsoft.AspNet.Hosting.Internal
     public class HostingApplication : IHttpApplication
     {
         private readonly IServiceProvider _applicationServices;
+        private readonly RequestDelegate _application;
         private readonly ILogger _logger;
         private readonly DiagnosticSource _diagnosticSource;
-        private readonly RequestDelegate _application;
         private readonly IHttpContextFactory _httpContextFactory;
 
         public HostingApplication(

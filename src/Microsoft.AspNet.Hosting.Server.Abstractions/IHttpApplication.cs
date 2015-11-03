@@ -20,14 +20,13 @@ namespace Microsoft.AspNet.Hosting.Server
         HttpContext CreateHttpContext(IFeatureCollection contextFeatures);
 
         /// <summary>
-        /// Create the application's asynchronous operation that processes an HttpContext.
+        /// Asynchronously processes an HttpContext.
         /// </summary>
         /// <param name="httpContext">The HttpContext that the operation will process.</param>
-        /// <returns>The asynchronous operation.</returns>
         Task InvokeAsync(HttpContext httpContext);
 
         /// <summary>
-        /// Dispose the given HttpContext.
+        /// Dispose a given HttpContext.
         /// </summary>
         /// <param name="httpContext">The HttpContext to be disposed.</param>
         void DisposeHttpContext(HttpContext httpContext);
