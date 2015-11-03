@@ -42,7 +42,7 @@ namespace Microsoft.AspNet.Hosting.Internal
         internal string ServerFactoryLocation { get; set; }
         internal IServer Server { get; set; }
 
-        internal IHttpApplication App { get; set; }
+        internal IHttpApplication Application { get; set; }
 
         public HostingEngine(
             IServiceCollection appServices,
@@ -92,7 +92,7 @@ namespace Microsoft.AspNet.Hosting.Internal
 
             logger.Starting();
 
-            Server.Start(App ?? new HostingApplication(_applicationServices, application));
+            Server.Start(Application ?? new HostingApplication(_applicationServices, application));
 
             _applicationLifetime.NotifyStarted();
             logger.Started();
