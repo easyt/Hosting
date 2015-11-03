@@ -138,7 +138,7 @@ namespace Microsoft.AspNet.TestHost
             _appInstance.Dispose();
         }
 
-        void IServer.Start(IHttpApplication app)
+        public void Start(IHttpApplication app)
         {
             _appDelegate = app.InvokeAsync;
         }
