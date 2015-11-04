@@ -18,15 +18,13 @@ namespace Microsoft.AspNet.TestHost
     {
         private const string DefaultEnvironmentName = "Development";
         private const string ServerName = nameof(TestServer);
-        private RequestDelegate _appDelegate;
         private IDisposable _appInstance;
         private bool _disposed = false;
-        private IHttpContextFactory _httpContextFactory;
+        private IHttpApplication _app;
 
         public TestServer(WebHostBuilder builder)
         {
             var hostingEngine = builder.UseServer(this).Build();
-            _httpContextFactory = hostingEngine.ApplicationServices.GetService<IHttpContextFactory>();
             _appInstance = hostingEngine.Start();
         }
 
@@ -99,7 +97,7 @@ namespace Microsoft.AspNet.TestHost
         public HttpMessageHandler CreateHandler()
         {
             var pathBase = BaseAddress == null ? PathString.Empty : PathString.FromUriComponent(BaseAddress);
-            return new ClientHandler(Invoke, pathBase, _httpContextFactory);
+            return new ClientHandler(Invoke, pathBase, _app);
         }
 
         public HttpClient CreateClient()
@@ -110,7 +108,7 @@ namespace Microsoft.AspNet.TestHost
         public WebSocketClient CreateWebSocketClient()
         {
             var pathBase = BaseAddress == null ? PathString.Empty : PathString.FromUriComponent(BaseAddress);
-            return new WebSocketClient(Invoke, pathBase, _httpContextFactory);
+            return new WebSocketClient(Invoke, pathBase, _app);
         }
 
         /// <summary>
@@ -129,7 +127,7 @@ namespace Microsoft.AspNet.TestHost
             {
                 throw new ObjectDisposedException(GetType().FullName);
             }
-            return _appDelegate(context);
+            return _app.InvokeAsync(context);
         }
 
         public void Dispose()
@@ -140,7 +138,7 @@ namespace Microsoft.AspNet.TestHost
 
         public void Start(IHttpApplication app)
         {
-            _appDelegate = app.InvokeAsync;
+            _app = app;
         }
     }
 }

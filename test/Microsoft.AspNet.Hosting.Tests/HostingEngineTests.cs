@@ -461,7 +461,7 @@ namespace Microsoft.AspNet.Hosting
         {
             var startInstance = new StartInstance(app.InvokeAsync);
             _startInstances.Add(startInstance);
-            app.InvokeAsync(new DefaultHttpContext(Features));
+            app.InvokeAsync(app.CreateHttpContext(Features));
         }
 
         public void Dispose()

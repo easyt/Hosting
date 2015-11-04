@@ -8,9 +8,9 @@ using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Features;
-using Microsoft.AspNet.Http.Internal;
 
 namespace Microsoft.AspNet.TestHost
 {
@@ -18,21 +18,21 @@ namespace Microsoft.AspNet.TestHost
     {
         private readonly RequestDelegate _next;
         private readonly PathString _pathBase;
-        private readonly IHttpContextFactory _httpContextFactory;
+        private readonly IHttpApplication _app;
 
-        internal WebSocketClient(RequestDelegate next, PathString pathBase, IHttpContextFactory httpContextFactory)
+        internal WebSocketClient(RequestDelegate next, PathString pathBase, IHttpApplication app)
         {
             if (next == null)
             {
                 throw new ArgumentNullException(nameof(next));
             }
-            if (httpContextFactory == null)
+            if (app == null)
             {
-                throw new ArgumentNullException(nameof(httpContextFactory));
+                throw new ArgumentNullException(nameof(app));
             }
 
             _next = next;
-            _httpContextFactory = httpContextFactory;
+            _app = app;
 
             // PathString.StartsWithSegments that we use below requires the base path to not end in a slash.
             if (pathBase.HasValue && pathBase.Value.EndsWith("/"))
@@ -58,7 +58,7 @@ namespace Microsoft.AspNet.TestHost
 
         public async Task<WebSocket> ConnectAsync(Uri uri, CancellationToken cancellationToken)
         {
-            var state = new RequestState(uri, _pathBase, cancellationToken, _httpContextFactory);
+            var state = new RequestState(uri, _pathBase, cancellationToken, _app);
 
             if (ConfigureRequest != null)
             {
@@ -88,20 +88,20 @@ namespace Microsoft.AspNet.TestHost
 
         private class RequestState : IDisposable, IHttpWebSocketFeature
         {
+            private readonly IHttpApplication _app;
             private TaskCompletionSource<WebSocket> _clientWebSocketTcs;
             private WebSocket _serverWebSocket;
-            private IHttpContextFactory _factory;
 
             public HttpContext HttpContext { get; private set; }
             public Task<WebSocket> WebSocketTask { get { return _clientWebSocketTcs.Task; } }
 
-            public RequestState(Uri uri, PathString pathBase, CancellationToken cancellationToken, IHttpContextFactory factory)
+            public RequestState(Uri uri, PathString pathBase, CancellationToken cancellationToken, IHttpApplication app)
             {
-                _factory = factory;
+                _app = app;
                 _clientWebSocketTcs = new TaskCompletionSource<WebSocket>();
 
                 // HttpContext
-                HttpContext = _factory.Create(new FeatureCollection());
+                HttpContext = (HttpContext)_app.CreateHttpContext(new FeatureCollection());
 
                 // Request
                 HttpContext.Features.Set<IHttpRequestFeature>(new RequestFeature());
@@ -155,7 +155,7 @@ namespace Microsoft.AspNet.TestHost
             {
                 if (HttpContext != null)
                 {
-                    _factory.Dispose(HttpContext);
+                    _app.DisposeHttpContext(HttpContext);
                 }
                 if (_serverWebSocket != null)
                 {

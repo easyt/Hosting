@@ -19,30 +19,26 @@ namespace Microsoft.AspNet.Hosting.Internal
         private readonly ILogger _logger;
         private readonly DiagnosticSource _diagnosticSource;
         private readonly IHttpContextFactory _httpContextFactory;
+        private IDisposable _logScope;
 
         public HostingApplication(
             IServiceProvider applicationServices,
-            RequestDelegate application)
+            RequestDelegate application,
+            ILogger logger,
+            DiagnosticSource diagnosticSource,
+            IHttpContextFactory httpContextFactory)
         {
             _applicationServices = applicationServices;
             _application = application;
-            _logger = _applicationServices.GetRequiredService<ILogger<HostingEngine>>();
-            _diagnosticSource = _applicationServices.GetRequiredService<DiagnosticSource>();
-            _httpContextFactory = _applicationServices.GetRequiredService<IHttpContextFactory>();
+            _logger = logger;
+            _diagnosticSource = diagnosticSource;
+            _httpContextFactory = httpContextFactory;
         }
 
-        public HttpContext CreateHttpContext(IFeatureCollection contextFeatures)
+        public object CreateHttpContext(object contextFeatures)
         {
-            return _httpContextFactory.Create(contextFeatures);
-        }
-
-        public void DisposeHttpContext(HttpContext httpContext)
-        {
-            _httpContextFactory.Dispose(httpContext);
-        }
-
-        public async Task InvokeAsync(HttpContext httpContext)
-        {
+            var httpContext = _httpContextFactory.Create((IFeatureCollection)contextFeatures);
+            
             httpContext.ApplicationServices = _applicationServices;
 
             if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.BeginRequest"))
@@ -50,32 +46,44 @@ namespace Microsoft.AspNet.Hosting.Internal
                 _diagnosticSource.Write("Microsoft.AspNet.Hosting.BeginRequest", new { httpContext = httpContext });
             }
 
-            using (_logger.RequestScope(httpContext))
+            _logScope = _logger.RequestScope(httpContext);
+
+            return httpContext;
+        }
+
+        public void DisposeHttpContext(object httpContext)
+        {
+            if (_logScope != null)
             {
-                int startTime = 0;
-                try
+                _logScope.Dispose();
+            }
+
+            _httpContextFactory.Dispose((HttpContext)httpContext);
+        }
+
+        public async Task InvokeAsync(object httpContext)
+        {
+            int startTime = 0;
+            try
+            {
+                _logger.RequestStarting((HttpContext)httpContext);
+
+                startTime = Environment.TickCount;
+                await _application((HttpContext)httpContext);
+
+                _logger.RequestFinished((HttpContext)httpContext, startTime);
+            }
+            catch (Exception ex)
+            {
+                if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.UnhandledException"))
                 {
-                    _logger.RequestStarting(httpContext);
-
-                    startTime = Environment.TickCount;
-                    await _application(httpContext);
-
-                    _logger.RequestFinished(httpContext, startTime);
+                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext = httpContext, exception = ex });
                 }
-                catch (Exception ex)
-                {
-                    _logger.RequestFailed(httpContext, startTime);
-
-                    if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.UnhandledException"))
-                    {
-                        _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext = httpContext, exception = ex });
-                    }
-                    throw;
-                }
+                throw;
             }
             if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.EndRequest"))
             {
-                _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext = httpContext });
+                _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext = (HttpContext)httpContext });
             }
         }
     }

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Microsoft.AspNet.Hosting.Builder;
@@ -87,10 +88,12 @@ namespace Microsoft.AspNet.Hosting.Internal
             var application = BuildApplication();
 
             var logger = _applicationServices.GetRequiredService<ILogger<HostingEngine>>();
+            var diagnosticSource = _applicationServices.GetRequiredService<DiagnosticSource>();
+            var httpContextFactory = _applicationServices.GetRequiredService<IHttpContextFactory>();
 
             logger.Starting();
 
-            Server.Start(new HostingApplication(_applicationServices, application));
+            Server.Start(new HostingApplication(_applicationServices, application, logger, diagnosticSource, httpContextFactory));
 
             _applicationLifetime.NotifyStarted();
             logger.Started();
