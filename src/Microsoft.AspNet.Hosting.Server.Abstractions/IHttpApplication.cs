@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
+using Microsoft.AspNet.Http.Features;
 
 namespace Microsoft.AspNet.Hosting.Server
 {
@@ -15,7 +16,7 @@ namespace Microsoft.AspNet.Hosting.Server
         /// </summary>
         /// <param name="contextFeatures">A collection of HTTP features to be used for creating the HttpContext.</param>
         /// <returns>The created HttpContext.</returns>
-        object CreateHttpContext(object contextFeatures);
+        object CreateHttpContext(IFeatureCollection contextFeatures);
 
         /// <summary>
         /// Asynchronously processes an HttpContext.

@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Features;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNet.Hosting.Internal
@@ -19,7 +18,6 @@ namespace Microsoft.AspNet.Hosting.Internal
         private readonly ILogger _logger;
         private readonly DiagnosticSource _diagnosticSource;
         private readonly IHttpContextFactory _httpContextFactory;
-        private IDisposable _logScope;
 
         public HostingApplication(
             IServiceProvider applicationServices,
@@ -35,55 +33,56 @@ namespace Microsoft.AspNet.Hosting.Internal
             _httpContextFactory = httpContextFactory;
         }
 
-        public object CreateHttpContext(object contextFeatures)
+        public object CreateHttpContext(IFeatureCollection contextFeatures)
         {
-            var httpContext = _httpContextFactory.Create((IFeatureCollection)contextFeatures);
-            
+            var httpContext = _httpContextFactory.Create(contextFeatures);
             httpContext.ApplicationServices = _applicationServices;
 
             if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.BeginRequest"))
             {
                 _diagnosticSource.Write("Microsoft.AspNet.Hosting.BeginRequest", new { httpContext = httpContext });
             }
-
-            _logScope = _logger.RequestScope(httpContext);
+            
+            httpContext.Features.Set(new HostingApplicationFeature(_logger.RequestScope(httpContext), Environment.TickCount));
+            _logger.RequestStarting(httpContext);
 
             return httpContext;
         }
 
         public void DisposeHttpContext(object httpContext)
         {
-            if (_logScope != null)
+            var context = httpContext as HttpContext;
+            var hostingApplicationFeature = context.Features.Get<HostingApplicationFeature>();
+
+            _logger.RequestFinished(context, hostingApplicationFeature.StartTime);
+
+            if (hostingApplicationFeature.LogScope != null)
             {
-                _logScope.Dispose();
+                hostingApplicationFeature.LogScope.Dispose();
             }
 
-            _httpContextFactory.Dispose((HttpContext)httpContext);
+            if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.EndRequest"))
+            {
+                _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext = context });
+            }
+
+            _httpContextFactory.Dispose(context);
         }
 
         public async Task InvokeAsync(object httpContext)
         {
-            int startTime = 0;
+            var context = httpContext as HttpContext;
             try
             {
-                _logger.RequestStarting((HttpContext)httpContext);
-
-                startTime = Environment.TickCount;
-                await _application((HttpContext)httpContext);
-
-                _logger.RequestFinished((HttpContext)httpContext, startTime);
+                await _application(context);
             }
             catch (Exception ex)
             {
                 if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.UnhandledException"))
                 {
-                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext = httpContext, exception = ex });
+                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext = context, exception = ex });
                 }
                 throw;
-            }
-            if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.EndRequest"))
-            {
-                _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext = (HttpContext)httpContext });
             }
         }
     }

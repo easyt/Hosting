@@ -240,9 +240,9 @@ namespace Microsoft.AspNet.TestHost
         {
             private readonly IHttpContextFactory _httpContextFactory = new HttpContextFactory(new HttpContextAccessor());
 
-            public object CreateHttpContext(object contextFeatures)
+            public object CreateHttpContext(IFeatureCollection contextFeatures)
             {
-                return _httpContextFactory.Create((IFeatureCollection)contextFeatures);
+                return _httpContextFactory.Create(contextFeatures);
             }
 
             public void DisposeHttpContext(object httpContext)

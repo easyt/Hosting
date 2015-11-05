@@ -136,7 +136,7 @@ namespace Microsoft.AspNet.TestHost
             _appInstance.Dispose();
         }
 
-        public void Start(IHttpApplication app)
+        void IServer.Start(IHttpApplication app)
         {
             _app = app;
         }

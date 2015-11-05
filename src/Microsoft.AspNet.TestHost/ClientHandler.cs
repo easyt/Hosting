@@ -86,6 +86,7 @@ namespace Microsoft.AspNet.TestHost
                     try
                     {
                         await _next(state.HttpContext);
+                        state.ServerCleanup(); // this is needed to set the EndRequest diagnostics
                         state.CompleteResponse();
                     }
                     catch (Exception ex)
@@ -94,7 +95,6 @@ namespace Microsoft.AspNet.TestHost
                     }
                     finally
                     {
-                        state.ServerCleanup();
                         registration.Dispose();
                     }
                 });
