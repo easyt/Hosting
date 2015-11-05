@@ -174,9 +174,20 @@ namespace Microsoft.AspNet.Hosting
 
             }
 
-            public void Start(IHttpApplication app)
+            public void Start<THttpContext>(IHttpApplication<THttpContext> app)
             {
-                RequestDelegate = app.InvokeAsync;
+                RequestDelegate = async ctx =>
+                {
+                    var httpContext = app.CreateHttpContext(ctx.Features);
+                    try
+                    {
+                        await app.InvokeAsync(httpContext);
+                    }
+                    finally
+                    {
+                        app.DisposeHttpContext(httpContext);
+                    }
+                };
             }
         }
     }

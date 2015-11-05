@@ -20,7 +20,7 @@ namespace Microsoft.AspNet.TestHost
         private const string ServerName = nameof(TestServer);
         private IDisposable _appInstance;
         private bool _disposed = false;
-        private IHttpApplication _app;
+        private Func<IFeatureCollection, Task> _requestHandler;
 
         public TestServer(WebHostBuilder builder)
         {
@@ -97,7 +97,7 @@ namespace Microsoft.AspNet.TestHost
         public HttpMessageHandler CreateHandler()
         {
             var pathBase = BaseAddress == null ? PathString.Empty : PathString.FromUriComponent(BaseAddress);
-            return new ClientHandler(Invoke, pathBase, _app);
+            return new ClientHandler(Invoke, pathBase);
         }
 
         public HttpClient CreateClient()
@@ -108,7 +108,7 @@ namespace Microsoft.AspNet.TestHost
         public WebSocketClient CreateWebSocketClient()
         {
             var pathBase = BaseAddress == null ? PathString.Empty : PathString.FromUriComponent(BaseAddress);
-            return new WebSocketClient(Invoke, pathBase, _app);
+            return new WebSocketClient(Invoke, pathBase);
         }
 
         /// <summary>
@@ -127,7 +127,7 @@ namespace Microsoft.AspNet.TestHost
             {
                 throw new ObjectDisposedException(GetType().FullName);
             }
-            return _app.InvokeAsync(context);
+            return _requestHandler(context.Features);
         }
 
         public void Dispose()
@@ -136,9 +136,20 @@ namespace Microsoft.AspNet.TestHost
             _appInstance.Dispose();
         }
 
-        void IServer.Start(IHttpApplication app)
+        void IServer.Start<THttpContext>(IHttpApplication<THttpContext> app)
         {
-            _app = app;
+            _requestHandler = async features =>
+            {
+                var httpContext = app.CreateHttpContext(features);
+                try
+                {
+                    await app.InvokeAsync(httpContext);
+                }
+                finally
+                {
+                    app.DisposeHttpContext(httpContext);
+                }
+            };
         }
     }
 }

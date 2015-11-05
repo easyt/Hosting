@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Features;
+using Microsoft.AspNet.Http.Internal;
 
 namespace Microsoft.AspNet.TestHost
 {
@@ -25,25 +26,19 @@ namespace Microsoft.AspNet.TestHost
     {
         private readonly RequestDelegate _next;
         private readonly PathString _pathBase;
-        private readonly IHttpApplication _app;
 
         /// <summary>
         /// Create a new handler.
         /// </summary>
         /// <param name="next">The pipeline entry point.</param>
-        public ClientHandler(RequestDelegate next, PathString pathBase, IHttpApplication app)
+        public ClientHandler(RequestDelegate next, PathString pathBase)
         {
             if (next == null)
             {
                 throw new ArgumentNullException(nameof(next));
             }
-            if (app == null)
-            {
-                throw new ArgumentNullException(nameof(app));
-            }
 
             _next = next;
-            _app = app;
 
             // PathString.StartsWithSegments that we use below requires the base path to not end in a slash.
             if (pathBase.HasValue && pathBase.Value.EndsWith("/"))
@@ -69,7 +64,7 @@ namespace Microsoft.AspNet.TestHost
                 throw new ArgumentNullException(nameof(request));
             }
 
-            var state = new RequestState(request, _pathBase, _app);
+            var state = new RequestState(request, _pathBase);
             var requestContent = request.Content ?? new StreamContent(Stream.Null);
             var body = await requestContent.ReadAsStreamAsync();
             if (body.CanSeek)
@@ -109,16 +104,14 @@ namespace Microsoft.AspNet.TestHost
             private ResponseStream _responseStream;
             private ResponseFeature _responseFeature;
             private CancellationTokenSource _requestAbortedSource;
-            private readonly IHttpApplication _app;
             private bool _pipelineFinished;
 
-            internal RequestState(HttpRequestMessage request, PathString pathBase, IHttpApplication app)
+            internal RequestState(HttpRequestMessage request, PathString pathBase)
             {
                 _request = request;
                 _responseTcs = new TaskCompletionSource<HttpResponseMessage>();
                 _requestAbortedSource = new CancellationTokenSource();
                 _pipelineFinished = false;
-                _app = app;
 
                 if (request.RequestUri.IsDefaultPort)
                 {
@@ -129,7 +122,7 @@ namespace Microsoft.AspNet.TestHost
                     request.Headers.Host = request.RequestUri.GetComponents(UriComponents.HostAndPort, UriFormat.UriEscaped);
                 }
 
-                HttpContext = (HttpContext)_app.CreateHttpContext(new FeatureCollection());
+                HttpContext = new DefaultHttpContext();
                 
                 HttpContext.Features.Set<IHttpRequestFeature>(new RequestFeature());
                 _responseFeature = new ResponseFeature();
@@ -241,10 +234,6 @@ namespace Microsoft.AspNet.TestHost
 
             internal void ServerCleanup()
             {
-                if (HttpContext != null)
-                {
-                    _app.DisposeHttpContext(HttpContext);
-                }
             }
         }
     }

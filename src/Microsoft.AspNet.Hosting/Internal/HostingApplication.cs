@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNet.Hosting.Internal
 {
-    public class HostingApplication : IHttpApplication
+    public class HostingApplication : IHttpApplication<HostingApplication.Context>
     {
         private readonly IServiceProvider _applicationServices;
         private readonly RequestDelegate _application;
@@ -33,57 +33,67 @@ namespace Microsoft.AspNet.Hosting.Internal
             _httpContextFactory = httpContextFactory;
         }
 
-        public object CreateHttpContext(IFeatureCollection contextFeatures)
+        public Context CreateHttpContext(IFeatureCollection contextFeatures)
         {
             var httpContext = _httpContextFactory.Create(contextFeatures);
-            httpContext.ApplicationServices = _applicationServices;
 
+            var scope = _logger.RequestScope(httpContext);
+            _logger.RequestStarting(httpContext);
             if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.BeginRequest"))
             {
-                _diagnosticSource.Write("Microsoft.AspNet.Hosting.BeginRequest", new { httpContext = httpContext });
+                _diagnosticSource.Write("Microsoft.AspNet.Hosting.BeginRequest", new { httpContext });
             }
-            
-            httpContext.Features.Set(new HostingApplicationFeature(_logger.RequestScope(httpContext), Environment.TickCount));
-            _logger.RequestStarting(httpContext);
 
-            return httpContext;
+            return new Context
+            {
+                HttpContext = httpContext,
+                Scope = scope,
+                TickCount = Environment.TickCount,
+            };
         }
 
-        public void DisposeHttpContext(object httpContext)
+        public void DisposeHttpContext(Context context)
         {
-            var context = httpContext as HttpContext;
-            var hostingApplicationFeature = context.Features.Get<HostingApplicationFeature>();
-
-            _logger.RequestFinished(context, hostingApplicationFeature.StartTime);
-
-            if (hostingApplicationFeature.LogScope != null)
-            {
-                hostingApplicationFeature.LogScope.Dispose();
-            }
+            var httpContext = context.HttpContext;
+            var elapsed = new TimeSpan(Environment.TickCount - context.TickCount);
 
             if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.EndRequest"))
             {
-                _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext = context });
+                _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext });
             }
+            _logger.RequestFinished(httpContext, elapsed);
+            context.Scope.Dispose();
 
-            _httpContextFactory.Dispose(context);
+            _httpContextFactory.Dispose(httpContext);
         }
 
-        public async Task InvokeAsync(object httpContext)
+        public async Task InvokeAsync(Context context)
         {
-            var context = httpContext as HttpContext;
+            var httpContext = context.HttpContext;
+            httpContext.ApplicationServices = _applicationServices;
             try
             {
-                await _application(context);
+                await _application(httpContext);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.UnhandledException"))
                 {
-                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext = context, exception = ex });
+                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext, exception });
                 }
                 throw;
             }
+            finally
+            {
+                httpContext.ApplicationServices = null;
+            }
+        }
+
+        public struct Context
+        {
+            public HttpContext HttpContext;
+            public IDisposable Scope;
+            public int TickCount;
         }
     }
 }

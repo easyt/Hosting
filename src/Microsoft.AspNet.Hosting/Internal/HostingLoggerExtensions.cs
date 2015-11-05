@@ -28,11 +28,10 @@ namespace Microsoft.AspNet.Hosting.Internal
             }
         }
 
-        public static void RequestFinished(this ILogger logger, HttpContext httpContext, int startTimeInTicks)
+        public static void RequestFinished(this ILogger logger, HttpContext httpContext, TimeSpan elapsed)
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
-                var elapsed = new TimeSpan(Environment.TickCount - startTimeInTicks);
                 logger.Log(
                     logLevel: LogLevel.Information,
                     eventId: LoggerEventIds.RequestFinished,

@@ -9,25 +9,25 @@ namespace Microsoft.AspNet.Hosting.Server
     /// <summary>
     /// Represents an HttpApplication.
     /// </summary>
-    public interface IHttpApplication
+    public interface IHttpApplication<THttpContext>
     {
         /// <summary>
         /// Create an HttpContext given a collection of HTTP features.
         /// </summary>
         /// <param name="contextFeatures">A collection of HTTP features to be used for creating the HttpContext.</param>
         /// <returns>The created HttpContext.</returns>
-        object CreateHttpContext(IFeatureCollection contextFeatures);
+        THttpContext CreateHttpContext(IFeatureCollection contextFeatures);
 
         /// <summary>
         /// Asynchronously processes an HttpContext.
         /// </summary>
         /// <param name="httpContext">The HttpContext that the operation will process.</param>
-        Task InvokeAsync(object httpContext);
+        Task InvokeAsync(THttpContext httpContext);
 
         /// <summary>
         /// Dispose a given HttpContext.
         /// </summary>
         /// <param name="httpContext">The HttpContext to be disposed.</param>
-        void DisposeHttpContext(object httpContext);
+        void DisposeHttpContext(THttpContext httpContext);
     }
 }
