@@ -178,14 +178,14 @@ namespace Microsoft.AspNet.Hosting
             {
                 RequestDelegate = async ctx =>
                 {
-                    var httpContext = app.CreateHttpContext(ctx.Features);
+                    var httpContext = app.CreateContext(ctx.Features);
                     try
                     {
-                        await app.InvokeAsync(httpContext);
+                        await app.ProcessRequest(httpContext);
                     }
                     finally
                     {
-                        app.DisposeHttpContext(httpContext);
+                        app.DisposeContext(httpContext);
                     }
                 };
             }

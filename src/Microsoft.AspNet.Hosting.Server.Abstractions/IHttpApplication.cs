@@ -16,18 +16,18 @@ namespace Microsoft.AspNet.Hosting.Server
         /// </summary>
         /// <param name="contextFeatures">A collection of HTTP features to be used for creating the HttpContext.</param>
         /// <returns>The created HttpContext.</returns>
-        THttpContext CreateHttpContext(IFeatureCollection contextFeatures);
+        THttpContext CreateContext(IFeatureCollection contextFeatures);
 
         /// <summary>
         /// Asynchronously processes an HttpContext.
         /// </summary>
         /// <param name="httpContext">The HttpContext that the operation will process.</param>
-        Task InvokeAsync(THttpContext httpContext);
+        Task ProcessRequest(THttpContext httpContext);
 
         /// <summary>
         /// Dispose a given HttpContext.
         /// </summary>
         /// <param name="httpContext">The HttpContext to be disposed.</param>
-        void DisposeHttpContext(THttpContext httpContext);
+        void DisposeContext(THttpContext httpContext);
     }
 }

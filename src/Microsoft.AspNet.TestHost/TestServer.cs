@@ -140,14 +140,14 @@ namespace Microsoft.AspNet.TestHost
         {
             _requestHandler = async features =>
             {
-                var httpContext = app.CreateHttpContext(features);
+                var httpContext = app.CreateContext(features);
                 try
                 {
-                    await app.InvokeAsync(httpContext);
+                    await app.ProcessRequest(httpContext);
                 }
                 finally
                 {
-                    app.DisposeHttpContext(httpContext);
+                    app.DisposeContext(httpContext);
                 }
             };
         }

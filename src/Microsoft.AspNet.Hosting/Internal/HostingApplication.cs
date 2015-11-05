@@ -33,7 +33,7 @@ namespace Microsoft.AspNet.Hosting.Internal
             _httpContextFactory = httpContextFactory;
         }
 
-        public Context CreateHttpContext(IFeatureCollection contextFeatures)
+        public Context CreateContext(IFeatureCollection contextFeatures)
         {
             var httpContext = _httpContextFactory.Create(contextFeatures);
 
@@ -52,7 +52,7 @@ namespace Microsoft.AspNet.Hosting.Internal
             };
         }
 
-        public void DisposeHttpContext(Context context)
+        public void DisposeContext(Context context)
         {
             var httpContext = context.HttpContext;
             var elapsed = new TimeSpan(Environment.TickCount - context.TickCount);
@@ -67,7 +67,7 @@ namespace Microsoft.AspNet.Hosting.Internal
             _httpContextFactory.Dispose(httpContext);
         }
 
-        public async Task InvokeAsync(Context context)
+        public async Task ProcessRequest(Context context)
         {
             var httpContext = context.HttpContext;
             httpContext.ApplicationServices = _applicationServices;
