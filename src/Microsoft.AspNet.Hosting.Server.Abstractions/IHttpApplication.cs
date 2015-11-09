@@ -22,7 +22,7 @@ namespace Microsoft.AspNet.Hosting.Server
         /// Asynchronously processes an HttpContext.
         /// </summary>
         /// <param name="httpContext">The HttpContext that the operation will process.</param>
-        Task ProcessRequest(THttpContext httpContext);
+        Task ProcessRequestAsync(THttpContext httpContext);
 
         /// <summary>
         /// Dispose a given HttpContext.

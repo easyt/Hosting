@@ -143,7 +143,7 @@ namespace Microsoft.AspNet.TestHost
                 var httpContext = app.CreateContext(features);
                 try
                 {
-                    await app.ProcessRequest(httpContext);
+                    await app.ProcessRequestAsync(httpContext);
                 }
                 finally
                 {

@@ -81,7 +81,6 @@ namespace Microsoft.AspNet.TestHost
                     try
                     {
                         await _next(state.HttpContext);
-                        state.ServerCleanup(); // this is needed to set the EndRequest diagnostics
                         state.CompleteResponse();
                     }
                     catch (Exception ex)
@@ -230,10 +229,6 @@ namespace Microsoft.AspNet.TestHost
                 _pipelineFinished = true;
                 _responseStream.Abort(exception);
                 _responseTcs.TrySetException(exception);
-            }
-
-            internal void ServerCleanup()
-            {
             }
         }
     }

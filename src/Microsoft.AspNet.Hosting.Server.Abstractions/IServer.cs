@@ -19,7 +19,7 @@ namespace Microsoft.AspNet.Hosting.Server
         /// <summary>
         /// Start the server with an HttpApplication.
         /// </summary>
-        /// <param name="app">An instance of <see cref="IHttpApplication"/>.</param>
-        void Start<THttpContext>(IHttpApplication<THttpContext> app);
+        /// <param name="application">An instance of <see cref="IHttpApplication"/>.</param>
+        void Start<THttpContext>(IHttpApplication<THttpContext> application);
     }
 }
