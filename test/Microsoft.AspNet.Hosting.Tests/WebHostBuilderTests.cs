@@ -181,7 +181,7 @@ namespace Microsoft.AspNet.Hosting
                     var httpContext = app.CreateContext(ctx.Features);
                     try
                     {
-                        await app.ProcessRequest(httpContext);
+                        await app.ProcessRequestAsync(httpContext);
                     }
                     finally
                     {

@@ -464,7 +464,7 @@ namespace Microsoft.AspNet.TestHost
             await Assert.ThrowsAsync<Exception>(() => server.CreateClient().GetAsync("/path"));
 
             Assert.NotNull(listener.BeginRequest?.HttpContext);
-            Assert.Null(listener.EndRequest?.HttpContext);
+            Assert.NotNull(listener.EndRequest?.HttpContext);
             Assert.NotNull(listener.UnhandledException?.HttpContext);
             Assert.NotNull(listener.UnhandledException?.Exception);
         }
