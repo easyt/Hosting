@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNet.Http.Features;
 
@@ -28,6 +29,7 @@ namespace Microsoft.AspNet.Hosting.Server
         /// Dispose a given HttpContext.
         /// </summary>
         /// <param name="httpContext">The HttpContext to be disposed.</param>
-        void DisposeContext(THttpContext httpContext);
+        /// <param name="exception">The Exception thrown when processing did not complete successfully, otherwise null.</param>
+        void DisposeContext(THttpContext httpContext, Exception exception = null);
     }
 }

@@ -52,16 +52,27 @@ namespace Microsoft.AspNet.Hosting.Internal
             };
         }
 
-        public void DisposeContext(Context context)
+        public void DisposeContext(Context context, Exception exception = null)
         {
             var httpContext = context.HttpContext;
             var elapsed = new TimeSpan(Environment.TickCount - context.TickCount);
 
-            if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.EndRequest"))
+            if (exception == null)
             {
-                _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext });
+                if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.EndRequest"))
+                {
+                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext });
+                }
+                _logger.RequestFinished(httpContext, elapsed);
             }
-            _logger.RequestFinished(httpContext, elapsed);
+            else
+            {
+                if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.UnhandledException"))
+                {
+                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext, exception });
+                }
+            }
+
             context.Scope.Dispose();
 
             _httpContextFactory.Dispose(httpContext);
@@ -74,14 +85,6 @@ namespace Microsoft.AspNet.Hosting.Internal
             try
             {
                 await _application(httpContext);
-            }
-            catch (Exception exception)
-            {
-                if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.UnhandledException"))
-                {
-                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext, exception });
-                }
-                throw;
             }
             finally
             {

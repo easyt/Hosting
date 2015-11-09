@@ -461,7 +461,17 @@ namespace Microsoft.AspNet.Hosting
         {
             var startInstance = new StartInstance();
             _startInstances.Add(startInstance);
-            app.ProcessRequestAsync(app.CreateContext(Features)); // this is really bad
+            var context = app.CreateContext(Features);
+            try
+            {
+                app.ProcessRequestAsync(context);
+            }
+            catch (Exception ex)
+            {
+                app.DisposeContext(context, ex);
+                throw;
+            }
+            app.DisposeContext(context);
         }
 
         public void Dispose()

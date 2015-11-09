@@ -145,10 +145,12 @@ namespace Microsoft.AspNet.TestHost
                 {
                     await app.ProcessRequestAsync(httpContext);
                 }
-                finally
+                catch (Exception ex)
                 {
-                    app.DisposeContext(httpContext);
+                    app.DisposeContext(httpContext, ex);
+                    throw;
                 }
+                app.DisposeContext(httpContext);
             };
         }
     }
