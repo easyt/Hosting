@@ -56,6 +56,7 @@ namespace Microsoft.AspNet.Hosting.Internal
         {
             var httpContext = context.HttpContext;
             var elapsed = new TimeSpan(Environment.TickCount - context.TickCount);
+            _logger.RequestFinished(httpContext, elapsed);
 
             if (exception == null)
             {
@@ -63,7 +64,6 @@ namespace Microsoft.AspNet.Hosting.Internal
                 {
                     _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext });
                 }
-                _logger.RequestFinished(httpContext, elapsed);
             }
             else
             {
@@ -94,9 +94,9 @@ namespace Microsoft.AspNet.Hosting.Internal
 
         public struct Context
         {
-            public HttpContext HttpContext;
-            public IDisposable Scope;
-            public int TickCount;
+            public HttpContext HttpContext { get; set; }
+            public IDisposable Scope { get; set; }
+            public int TickCount { get; set; }
         }
     }
 }
