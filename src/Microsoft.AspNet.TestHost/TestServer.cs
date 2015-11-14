@@ -136,21 +136,21 @@ namespace Microsoft.AspNet.TestHost
             _appInstance.Dispose();
         }
 
-        void IServer.Start<THttpContext>(IHttpApplication<THttpContext> app)
+        void IServer.Start<THttpContext>(IHttpApplication<THttpContext> application)
         {
             _requestHandler = async features =>
             {
-                var httpContext = app.CreateContext(features);
+                var httpContext = application.CreateContext(features);
                 try
                 {
-                    await app.ProcessRequestAsync(httpContext);
+                    await application.ProcessRequestAsync(httpContext);
                 }
                 catch (Exception ex)
                 {
-                    app.DisposeContext(httpContext, ex);
+                    application.DisposeContext(httpContext, ex);
                     throw;
                 }
-                app.DisposeContext(httpContext);
+                application.DisposeContext(httpContext);
             };
         }
     }

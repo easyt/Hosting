@@ -36,40 +36,44 @@ namespace Microsoft.AspNet.Hosting.Internal
         public Context CreateContext(IFeatureCollection contextFeatures)
         {
             var httpContext = _httpContextFactory.Create(contextFeatures);
+            var startTick = Environment.TickCount;
 
             var scope = _logger.RequestScope(httpContext);
             _logger.RequestStarting(httpContext);
             if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.BeginRequest"))
             {
-                _diagnosticSource.Write("Microsoft.AspNet.Hosting.BeginRequest", new { httpContext });
+                _diagnosticSource.Write("Microsoft.AspNet.Hosting.BeginRequest", new { httpContext = httpContext, tickCount = startTick });
             }
 
             return new Context
             {
                 HttpContext = httpContext,
                 Scope = scope,
-                TickCount = Environment.TickCount,
+                StartTick = startTick,
             };
         }
 
         public void DisposeContext(Context context, Exception exception = null)
         {
             var httpContext = context.HttpContext;
-            var elapsed = new TimeSpan(Environment.TickCount - context.TickCount);
+            var currentTick = Environment.TickCount;
+            var elapsed = new TimeSpan(currentTick < context.StartTick ? 
+                (int.MaxValue - context.StartTick) + (currentTick - int.MinValue) : 
+                currentTick - context.StartTick);
             _logger.RequestFinished(httpContext, elapsed);
 
             if (exception == null)
             {
                 if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.EndRequest"))
                 {
-                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext });
+                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.EndRequest", new { httpContext = httpContext, tickCount = currentTick });
                 }
             }
             else
             {
                 if (_diagnosticSource.IsEnabled("Microsoft.AspNet.Hosting.UnhandledException"))
                 {
-                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext, exception });
+                    _diagnosticSource.Write("Microsoft.AspNet.Hosting.UnhandledException", new { httpContext = httpContext, tickCount = currentTick, exception = exception });
                 }
             }
 
@@ -96,7 +100,7 @@ namespace Microsoft.AspNet.Hosting.Internal
         {
             public HttpContext HttpContext { get; set; }
             public IDisposable Scope { get; set; }
-            public int TickCount { get; set; }
+            public int StartTick { get; set; }
         }
     }
 }
