@@ -175,7 +175,7 @@ namespace Microsoft.AspNet.Hosting
 
             }
 
-            public void Start<THttpContext>(IHttpApplication<THttpContext> app)
+            public void Start(IHttpApplication app)
             {
                 RequestDelegate = async ctx =>
                 {

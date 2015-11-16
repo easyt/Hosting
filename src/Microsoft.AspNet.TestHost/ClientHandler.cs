@@ -11,9 +11,10 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNet.Hosting.Internal;
+using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Features;
-using Microsoft.AspNet.Http.Internal;
 
 namespace Microsoft.AspNet.TestHost
 {
@@ -23,21 +24,27 @@ namespace Microsoft.AspNet.TestHost
     /// </summary>
     public class ClientHandler : HttpMessageHandler
     {
-        private readonly RequestDelegate _next;
+        private readonly Func<object, Task> _next;
+        private readonly IHttpApplication _application;
         private readonly PathString _pathBase;
 
         /// <summary>
         /// Create a new handler.
         /// </summary>
         /// <param name="next">The pipeline entry point.</param>
-        public ClientHandler(RequestDelegate next, PathString pathBase)
+        public ClientHandler(Func<object, Task> next, PathString pathBase, IHttpApplication application)
         {
             if (next == null)
             {
                 throw new ArgumentNullException(nameof(next));
             }
+            if (application == null)
+            {
+                throw new ArgumentNullException(nameof(application));
+            }
 
             _next = next;
+            _application = application;
 
             // PathString.StartsWithSegments that we use below requires the base path to not end in a slash.
             if (pathBase.HasValue && pathBase.Value.EndsWith("/"))
@@ -63,7 +70,7 @@ namespace Microsoft.AspNet.TestHost
                 throw new ArgumentNullException(nameof(request));
             }
 
-            var state = new RequestState(request, _pathBase);
+            var state = new RequestState(request, _pathBase, _application);
             var requestContent = request.Content ?? new StreamContent(Stream.Null);
             var body = await requestContent.ReadAsStreamAsync();
             if (body.CanSeek)
@@ -71,7 +78,7 @@ namespace Microsoft.AspNet.TestHost
                 // This body may have been consumed before, rewind it.
                 body.Seek(0, SeekOrigin.Begin);
             }
-            state.HttpContext.Request.Body = body;
+            state.HostingApplicationContext.HttpContext.Request.Body = body;
             var registration = cancellationToken.Register(state.AbortRequest);
 
             // Async offload, don't let the test code block the caller.
@@ -79,11 +86,13 @@ namespace Microsoft.AspNet.TestHost
                 {
                     try
                     {
-                        await _next(state.HttpContext);
+                        await _next(state.HostingApplicationContext);
+                        state.ServerCleanup();
                         state.CompleteResponse();
                     }
                     catch (Exception ex)
                     {
+                        state.ServerCleanup(ex);
                         state.Abort(ex);
                     }
                     finally
@@ -98,15 +107,17 @@ namespace Microsoft.AspNet.TestHost
         private class RequestState
         {
             private readonly HttpRequestMessage _request;
+            private readonly IHttpApplication _application;
             private TaskCompletionSource<HttpResponseMessage> _responseTcs;
             private ResponseStream _responseStream;
             private ResponseFeature _responseFeature;
             private CancellationTokenSource _requestAbortedSource;
             private bool _pipelineFinished;
 
-            internal RequestState(HttpRequestMessage request, PathString pathBase)
+            internal RequestState(HttpRequestMessage request, PathString pathBase, IHttpApplication application)
             {
                 _request = request;
+                _application = application;
                 _responseTcs = new TaskCompletionSource<HttpResponseMessage>();
                 _requestAbortedSource = new CancellationTokenSource();
                 _pipelineFinished = false;
@@ -120,12 +131,13 @@ namespace Microsoft.AspNet.TestHost
                     request.Headers.Host = request.RequestUri.GetComponents(UriComponents.HostAndPort, UriFormat.UriEscaped);
                 }
 
-                HttpContext = new DefaultHttpContext();
-                
-                HttpContext.Features.Set<IHttpRequestFeature>(new RequestFeature());
+                HostingApplicationContext = (HostingApplicationContext)application.CreateContext(new FeatureCollection());
+                var httpContext = HostingApplicationContext.HttpContext;
+
+                httpContext.Features.Set<IHttpRequestFeature>(new RequestFeature());
                 _responseFeature = new ResponseFeature();
-                HttpContext.Features.Set<IHttpResponseFeature>(_responseFeature);
-                var serverRequest = HttpContext.Request;
+                httpContext.Features.Set<IHttpResponseFeature>(_responseFeature);
+                var serverRequest = httpContext.Request;
                 serverRequest.Protocol = "HTTP/" + request.Version.ToString(2);
                 serverRequest.Scheme = request.RequestUri.Scheme;
                 serverRequest.Method = request.Method.ToString();
@@ -159,12 +171,12 @@ namespace Microsoft.AspNet.TestHost
                 }
 
                 _responseStream = new ResponseStream(ReturnResponseMessage, AbortRequest);
-                HttpContext.Response.Body = _responseStream;
-                HttpContext.Response.StatusCode = 200;
-                HttpContext.RequestAborted = _requestAbortedSource.Token;
+                httpContext.Response.Body = _responseStream;
+                httpContext.Response.StatusCode = 200;
+                httpContext.RequestAborted = _requestAbortedSource.Token;
             }
 
-            public HttpContext HttpContext { get; private set; }
+            public HostingApplicationContext HostingApplicationContext { get; private set; }
 
             public Task<HttpResponseMessage> ResponseTask
             {
@@ -203,16 +215,17 @@ namespace Microsoft.AspNet.TestHost
             private HttpResponseMessage GenerateResponse()
             {
                 _responseFeature.FireOnSendingHeaders();
+                var httpContext = HostingApplicationContext.HttpContext;
 
                 var response = new HttpResponseMessage();
-                response.StatusCode = (HttpStatusCode)HttpContext.Response.StatusCode;
-                response.ReasonPhrase = HttpContext.Features.Get<IHttpResponseFeature>().ReasonPhrase;
+                response.StatusCode = (HttpStatusCode)httpContext.Response.StatusCode;
+                response.ReasonPhrase = httpContext.Features.Get<IHttpResponseFeature>().ReasonPhrase;
                 response.RequestMessage = _request;
                 // response.Version = owinResponse.Protocol;
 
                 response.Content = new StreamContent(_responseStream);
 
-                foreach (var header in HttpContext.Response.Headers)
+                foreach (var header in httpContext.Response.Headers)
                 {
                     if (!response.Headers.TryAddWithoutValidation(header.Key, (IEnumerable<string>)header.Value))
                     {
@@ -228,6 +241,19 @@ namespace Microsoft.AspNet.TestHost
                 _pipelineFinished = true;
                 _responseStream.Abort(exception);
                 _responseTcs.TrySetException(exception);
+            }
+
+            internal void ServerCleanup()
+            {
+                ServerCleanup(exception: null);
+            }
+
+            internal void ServerCleanup(Exception exception)
+            {
+                if (HostingApplicationContext != null)
+                {
+                    _application.DisposeContext(HostingApplicationContext, exception);
+                }
             }
         }
     }

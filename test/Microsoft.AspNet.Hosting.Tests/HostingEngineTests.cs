@@ -457,7 +457,7 @@ namespace Microsoft.AspNet.Hosting
             return new WebHostBuilder(config ?? new ConfigurationBuilder().Build());
         }
 
-        public void Start<THttpContext>(IHttpApplication<THttpContext> app)
+        public void Start(IHttpApplication app)
         {
             var startInstance = new StartInstance();
             _startInstances.Add(startInstance);

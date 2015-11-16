@@ -8,6 +8,7 @@ using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNet.Hosting.Internal;
 using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Features;
@@ -17,17 +18,23 @@ namespace Microsoft.AspNet.TestHost
 {
     public class WebSocketClient
     {
-        private readonly RequestDelegate _next;
+        private readonly Func<object, Task> _next;
+        private readonly IHttpApplication _application;
         private readonly PathString _pathBase;
 
-        internal WebSocketClient(RequestDelegate next, PathString pathBase)
+        internal WebSocketClient(Func<object, Task> next, PathString pathBase, IHttpApplication application)
         {
             if (next == null)
             {
                 throw new ArgumentNullException(nameof(next));
             }
+            if (application == null)
+            {
+                throw new ArgumentNullException(nameof(application));
+            }
 
             _next = next;
+            _application = application;
 
             // PathString.StartsWithSegments that we use below requires the base path to not end in a slash.
             if (pathBase.HasValue && pathBase.Value.EndsWith("/"))
@@ -53,11 +60,11 @@ namespace Microsoft.AspNet.TestHost
 
         public async Task<WebSocket> ConnectAsync(Uri uri, CancellationToken cancellationToken)
         {
-            var state = new RequestState(uri, _pathBase, cancellationToken);
+            var state = new RequestState(uri, _pathBase, cancellationToken, _application);
 
             if (ConfigureRequest != null)
             {
-                ConfigureRequest(state.HttpContext.Request);
+                ConfigureRequest(state.HostingApplicationContext.HttpContext.Request);
             }
 
             // Async offload, don't let the test code block the caller.
@@ -65,11 +72,13 @@ namespace Microsoft.AspNet.TestHost
             {
                 try
                 {
-                    await _next(state.HttpContext);
+                    await _next(state.HostingApplicationContext);
+                    state.ServerCleanup();
                     state.PipelineComplete();
                 }
                 catch (Exception ex)
                 {
+                    state.ServerCleanup(ex);
                     state.PipelineFailed(ex);
                 }
                 finally
@@ -83,22 +92,25 @@ namespace Microsoft.AspNet.TestHost
 
         private class RequestState : IDisposable, IHttpWebSocketFeature
         {
+            private readonly IHttpApplication _application;
             private TaskCompletionSource<WebSocket> _clientWebSocketTcs;
             private WebSocket _serverWebSocket;
 
-            public HttpContext HttpContext { get; private set; }
+            public HostingApplicationContext HostingApplicationContext { get; private set; }
             public Task<WebSocket> WebSocketTask { get { return _clientWebSocketTcs.Task; } }
 
-            public RequestState(Uri uri, PathString pathBase, CancellationToken cancellationToken)
+            public RequestState(Uri uri, PathString pathBase, CancellationToken cancellationToken, IHttpApplication application)
             {
                 _clientWebSocketTcs = new TaskCompletionSource<WebSocket>();
+                _application = application;
 
                 // HttpContext
-                HttpContext = new DefaultHttpContext();
+                HostingApplicationContext = (HostingApplicationContext)_application.CreateContext(new FeatureCollection());
+                var httpContext = HostingApplicationContext.HttpContext;
 
                 // Request
-                HttpContext.Features.Set<IHttpRequestFeature>(new RequestFeature());
-                var request = HttpContext.Request;
+                httpContext.Features.Set<IHttpRequestFeature>(new RequestFeature());
+                var request = httpContext.Request;
                 request.Protocol = "HTTP/1.1";
                 var scheme = uri.Scheme;
                 scheme = (scheme == "ws") ? "http" : scheme;
@@ -125,18 +137,18 @@ namespace Microsoft.AspNet.TestHost
                 request.Body = Stream.Null;
 
                 // Response
-                HttpContext.Features.Set<IHttpResponseFeature>(new ResponseFeature());
-                var response = HttpContext.Response;
+                httpContext.Features.Set<IHttpResponseFeature>(new ResponseFeature());
+                var response = httpContext.Response;
                 response.Body = Stream.Null;
                 response.StatusCode = 200;
 
                 // WebSocket
-                HttpContext.Features.Set<IHttpWebSocketFeature>(this);
+                httpContext.Features.Set<IHttpWebSocketFeature>(this);
             }
 
             public void PipelineComplete()
             {
-                PipelineFailed(new InvalidOperationException("Incomplete handshake, status code: " + HttpContext.Response.StatusCode));
+                PipelineFailed(new InvalidOperationException("Incomplete handshake, status code: " + HostingApplicationContext.HttpContext.Response.StatusCode));
             }
 
             public void PipelineFailed(Exception ex)
@@ -149,6 +161,19 @@ namespace Microsoft.AspNet.TestHost
                 if (_serverWebSocket != null)
                 {
                     _serverWebSocket.Dispose();
+                }
+            }
+
+            internal void ServerCleanup()
+            {
+                ServerCleanup(exception: null);
+            }
+
+            internal void ServerCleanup(Exception exception)
+            {
+                if (HostingApplicationContext != null)
+                {
+                    _application.DisposeContext(HostingApplicationContext, exception);
                 }
             }
 
@@ -170,7 +195,7 @@ namespace Microsoft.AspNet.TestHost
 
             Task<WebSocket> IHttpWebSocketFeature.AcceptAsync(WebSocketAcceptContext context)
             {
-                HttpContext.Response.StatusCode = 101; // Switching Protocols
+                HostingApplicationContext.HttpContext.Response.StatusCode = 101; // Switching Protocols
 
                 var websockets = TestWebSocket.CreatePair(context.SubProtocol);
                 _clientWebSocketTcs.SetResult(websockets.Item1);

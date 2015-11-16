@@ -20,7 +20,7 @@ namespace Microsoft.AspNet.TestHost
         private const string ServerName = nameof(TestServer);
         private IDisposable _appInstance;
         private bool _disposed = false;
-        private Func<IFeatureCollection, Task> _requestHandler;
+        private IHttpApplication _application;
 
         public TestServer(WebHostBuilder builder)
         {
@@ -97,7 +97,7 @@ namespace Microsoft.AspNet.TestHost
         public HttpMessageHandler CreateHandler()
         {
             var pathBase = BaseAddress == null ? PathString.Empty : PathString.FromUriComponent(BaseAddress);
-            return new ClientHandler(Invoke, pathBase);
+            return new ClientHandler(Invoke, pathBase, _application);
         }
 
         public HttpClient CreateClient()
@@ -108,7 +108,7 @@ namespace Microsoft.AspNet.TestHost
         public WebSocketClient CreateWebSocketClient()
         {
             var pathBase = BaseAddress == null ? PathString.Empty : PathString.FromUriComponent(BaseAddress);
-            return new WebSocketClient(Invoke, pathBase);
+            return new WebSocketClient(Invoke, pathBase, _application);
         }
 
         /// <summary>
@@ -121,13 +121,13 @@ namespace Microsoft.AspNet.TestHost
             return new RequestBuilder(this, path);
         }
 
-        public Task Invoke(HttpContext context)
+        public Task Invoke(object context)
         {
             if (_disposed)
             {
                 throw new ObjectDisposedException(GetType().FullName);
             }
-            return _requestHandler(context.Features);
+            return _application.ProcessRequestAsync(context);
         }
 
         public void Dispose()
@@ -136,22 +136,9 @@ namespace Microsoft.AspNet.TestHost
             _appInstance.Dispose();
         }
 
-        void IServer.Start<THttpContext>(IHttpApplication<THttpContext> application)
+        void IServer.Start(IHttpApplication application)
         {
-            _requestHandler = async features =>
-            {
-                var httpContext = application.CreateContext(features);
-                try
-                {
-                    await application.ProcessRequestAsync(httpContext);
-                }
-                catch (Exception ex)
-                {
-                    application.DisposeContext(httpContext, ex);
-                    throw;
-                }
-                application.DisposeContext(httpContext);
-            };
+            _application = application;
         }
     }
 }

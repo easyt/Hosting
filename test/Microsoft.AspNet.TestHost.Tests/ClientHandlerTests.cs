@@ -7,10 +7,11 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNet.Hosting.Internal;
 using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Http;
-using Microsoft.AspNet.Http.Features;
 using Microsoft.AspNet.Http.Internal;
+using Microsoft.AspNet.Http.Features;
 using Microsoft.AspNet.Testing.xunit;
 using Xunit;
 
@@ -18,11 +19,14 @@ namespace Microsoft.AspNet.TestHost
 {
     public class ClientHandlerTests
     {
+        private readonly DummyApplication _dummyInstance = new DummyApplication();
+
         [Fact]
         public Task ExpectedKeysAreAvailable()
         {
-            var handler = new ClientHandler(context =>
+            var handler = new ClientHandler(hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 // TODO: Assert.True(context.RequestAborted.CanBeCanceled);
                 Assert.Equal("HTTP/1.1", context.Request.Protocol);
                 Assert.Equal("GET", context.Request.Method);
@@ -39,7 +43,7 @@ namespace Microsoft.AspNet.TestHost
                 Assert.Equal("example.com", context.Request.Host.Value);
 
                 return Task.FromResult(0);
-            }, new PathString("/A/Path/"));
+            }, new PathString("/A/Path/"), new DummyApplication());
             var httpClient = new HttpClient(handler);
             return httpClient.GetAsync("https://example.com/A/Path/and/file.txt?and=query");
         }
@@ -47,13 +51,14 @@ namespace Microsoft.AspNet.TestHost
         [Fact]
         public Task SingleSlashNotMovedToPathBase()
         {
-            var handler = new ClientHandler(context =>
+            var handler = new ClientHandler(hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 Assert.Equal("", context.Request.PathBase.Value);
                 Assert.Equal("/", context.Request.Path.Value);
 
                 return Task.FromResult(0);
-            }, new PathString(""));
+            }, new PathString(""), new DummyApplication());
             var httpClient = new HttpClient(handler);
             return httpClient.GetAsync("https://example.com/");
         }
@@ -62,14 +67,15 @@ namespace Microsoft.AspNet.TestHost
         public async Task ResubmitRequestWorks()
         {
             int requestCount = 1;
-            var handler = new ClientHandler(context =>
+            var handler = new ClientHandler(hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 int read = context.Request.Body.Read(new byte[100], 0, 100);
                 Assert.Equal(11, read);
 
                 context.Response.Headers["TestHeader"] = "TestValue:" + requestCount++;
                 return Task.FromResult(0);
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
 
             HttpMessageInvoker invoker = new HttpMessageInvoker(handler);
             HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Post, "https://example.com/");
@@ -85,11 +91,12 @@ namespace Microsoft.AspNet.TestHost
         [Fact]
         public async Task MiddlewareOnlySetsHeaders()
         {
-            var handler = new ClientHandler(context =>
+            var handler = new ClientHandler(hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 return Task.FromResult(0);
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
             var httpClient = new HttpClient(handler);
             HttpResponseMessage response = await httpClient.GetAsync("https://example.com/");
             Assert.Equal("TestValue", response.Headers.GetValues("TestHeader").First());
@@ -99,11 +106,11 @@ namespace Microsoft.AspNet.TestHost
         public async Task BlockingMiddlewareShouldNotBlockClient()
         {
             ManualResetEvent block = new ManualResetEvent(false);
-            var handler = new ClientHandler(context =>
+            var handler = new ClientHandler(hostingApplicationContext =>
             {
                 block.WaitOne();
                 return Task.FromResult(0);
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
             var httpClient = new HttpClient(handler);
             Task<HttpResponseMessage> task = httpClient.GetAsync("https://example.com/");
             Assert.False(task.IsCompleted);
@@ -116,13 +123,14 @@ namespace Microsoft.AspNet.TestHost
         public async Task HeadersAvailableBeforeBodyFinished()
         {
             ManualResetEvent block = new ManualResetEvent(false);
-            var handler = new ClientHandler(async context =>
+            var handler = new ClientHandler(async hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 await context.Response.WriteAsync("BodyStarted,");
                 block.WaitOne();
                 await context.Response.WriteAsync("BodyFinished");
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
             var httpClient = new HttpClient(handler);
             HttpResponseMessage response = await httpClient.GetAsync("https://example.com/",
                 HttpCompletionOption.ResponseHeadersRead);
@@ -135,13 +143,14 @@ namespace Microsoft.AspNet.TestHost
         public async Task FlushSendsHeaders()
         {
             ManualResetEvent block = new ManualResetEvent(false);
-            var handler = new ClientHandler(async context =>
+            var handler = new ClientHandler(async hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 context.Response.Body.Flush();
                 block.WaitOne();
                 await context.Response.WriteAsync("BodyFinished");
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
             var httpClient = new HttpClient(handler);
             HttpResponseMessage response = await httpClient.GetAsync("https://example.com/",
                 HttpCompletionOption.ResponseHeadersRead);
@@ -154,13 +163,14 @@ namespace Microsoft.AspNet.TestHost
         public async Task ClientDisposalCloses()
         {
             ManualResetEvent block = new ManualResetEvent(false);
-            var handler = new ClientHandler(context =>
+            var handler = new ClientHandler(hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 context.Response.Body.Flush();
                 block.WaitOne();
                 return Task.FromResult(0);
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
             var httpClient = new HttpClient(handler);
             HttpResponseMessage response = await httpClient.GetAsync("https://example.com/",
                 HttpCompletionOption.ResponseHeadersRead);
@@ -179,13 +189,14 @@ namespace Microsoft.AspNet.TestHost
         public async Task ClientCancellationAborts()
         {
             ManualResetEvent block = new ManualResetEvent(false);
-            var handler = new ClientHandler(context =>
+            var handler = new ClientHandler(hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 context.Response.Body.Flush();
                 block.WaitOne();
                 return Task.FromResult(0);
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
             var httpClient = new HttpClient(handler);
             HttpResponseMessage response = await httpClient.GetAsync("https://example.com/",
                 HttpCompletionOption.ResponseHeadersRead);
@@ -204,10 +215,10 @@ namespace Microsoft.AspNet.TestHost
         [Fact]
         public Task ExceptionBeforeFirstWriteIsReported()
         {
-            var handler = new ClientHandler(context =>
+            var handler = new ClientHandler(hostingApplicationContext =>
             {
                 throw new InvalidOperationException("Test Exception");
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
             var httpClient = new HttpClient(handler);
             return Assert.ThrowsAsync<InvalidOperationException>(() => httpClient.GetAsync("https://example.com/",
                 HttpCompletionOption.ResponseHeadersRead));
@@ -218,13 +229,14 @@ namespace Microsoft.AspNet.TestHost
         public async Task ExceptionAfterFirstWriteIsReported()
         {
             ManualResetEvent block = new ManualResetEvent(false);
-            var handler = new ClientHandler(async context =>
+            var handler = new ClientHandler(async hostingApplicationContext =>
             {
+                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 await context.Response.WriteAsync("BodyStarted");
                 block.WaitOne();
                 throw new InvalidOperationException("Test Exception");
-            }, PathString.Empty);
+            }, PathString.Empty, new DummyApplication());
             var httpClient = new HttpClient(handler);
             HttpResponseMessage response = await httpClient.GetAsync("https://example.com/",
                 HttpCompletionOption.ResponseHeadersRead);
@@ -232,6 +244,34 @@ namespace Microsoft.AspNet.TestHost
             block.Set();
             var ex = await Assert.ThrowsAsync<HttpRequestException>(() => response.Content.ReadAsStringAsync());
             Assert.IsType<InvalidOperationException>(ex.GetBaseException());
+        }
+
+        private class DummyApplication : IHttpApplication
+        {
+            private readonly IHttpContextFactory _httpContextFactory = new HttpContextFactory(new HttpContextAccessor());
+            public object CreateContext(IFeatureCollection contextFeatures)
+            {
+                return new HostingApplicationContext()
+                {
+                    HttpContext = _httpContextFactory.Create(contextFeatures)
+                };
+            }
+
+            public void DisposeContext(object context)
+            {
+                DisposeContext(context, null);
+            }
+
+            public void DisposeContext(object context, Exception exception)
+            {
+                var httpContext = ((HostingApplicationContext)context).HttpContext;
+                _httpContextFactory.Dispose(httpContext);
+            }
+
+            public Task ProcessRequestAsync(object context)
+            {
+                return Task.FromResult(0);
+            }
         }
     }
 }
