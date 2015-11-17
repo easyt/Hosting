@@ -11,6 +11,7 @@ using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Context = Microsoft.AspNet.Hosting.Internal.HostingApplication.Context;
 
 namespace Microsoft.AspNet.TestHost
 {
@@ -20,7 +21,7 @@ namespace Microsoft.AspNet.TestHost
         private const string ServerName = nameof(TestServer);
         private IDisposable _appInstance;
         private bool _disposed = false;
-        private IHttpApplication _application;
+        private IHttpApplication<Context> _application;
 
         public TestServer(WebHostBuilder builder)
         {
@@ -121,7 +122,7 @@ namespace Microsoft.AspNet.TestHost
             return new RequestBuilder(this, path);
         }
 
-        public Task Invoke(object context)
+        public Task Invoke(Context context)
         {
             if (_disposed)
             {
@@ -136,9 +137,9 @@ namespace Microsoft.AspNet.TestHost
             _appInstance.Dispose();
         }
 
-        void IServer.Start(IHttpApplication application)
+        void IServer.Start<THttpContext>(IHttpApplication<THttpContext> application)
         {
-            _application = application;
+            _application = (IHttpApplication<Context>)application;
         }
     }
 }

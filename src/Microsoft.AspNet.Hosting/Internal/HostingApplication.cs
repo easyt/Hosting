@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNet.Hosting.Internal
 {
-    public class HostingApplication : IHttpApplication
+    public class HostingApplication : IHttpApplication<HostingApplication.Context>
     {
         private readonly IServiceProvider _applicationServices;
         private readonly RequestDelegate _application;
@@ -33,7 +33,7 @@ namespace Microsoft.AspNet.Hosting.Internal
             _httpContextFactory = httpContextFactory;
         }
 
-        public object CreateContext(IFeatureCollection contextFeatures)
+        public Context CreateContext(IFeatureCollection contextFeatures)
         {
             var httpContext = _httpContextFactory.Create(contextFeatures);
             var startTick = Environment.TickCount;
@@ -45,7 +45,7 @@ namespace Microsoft.AspNet.Hosting.Internal
                 _diagnosticSource.Write("Microsoft.AspNet.Hosting.BeginRequest", new { httpContext = httpContext, tickCount = startTick });
             }
 
-            return new HostingApplicationContext
+            return new Context
             {
                 HttpContext = httpContext,
                 Scope = scope,
@@ -53,19 +53,13 @@ namespace Microsoft.AspNet.Hosting.Internal
             };
         }
 
-        public void DisposeContext(object context)
+        public void DisposeContext(Context context, Exception exception)
         {
-            DisposeContext(context, null);
-        }
-
-        public void DisposeContext(object context, Exception exception)
-        {
-            var hostingApplicationContext = (HostingApplicationContext)context;
-            var httpContext = hostingApplicationContext.HttpContext;
+            var httpContext = context.HttpContext;
             var currentTick = Environment.TickCount;
-            var elapsed = new TimeSpan(currentTick < hostingApplicationContext.StartTick ? 
-                (int.MaxValue - hostingApplicationContext.StartTick) + (currentTick - int.MinValue) : 
-                currentTick - hostingApplicationContext.StartTick);
+            var elapsed = new TimeSpan(currentTick < context.StartTick ? 
+                (int.MaxValue - context.StartTick) + (currentTick - int.MinValue) : 
+                currentTick - context.StartTick);
             _logger.RequestFinished(httpContext, elapsed);
 
             if (exception == null)
@@ -83,15 +77,14 @@ namespace Microsoft.AspNet.Hosting.Internal
                 }
             }
 
-            hostingApplicationContext.Scope.Dispose();
+            context.Scope.Dispose();
 
             _httpContextFactory.Dispose(httpContext);
         }
 
-        public async Task ProcessRequestAsync(object context)
+        public async Task ProcessRequestAsync(Context context)
         {
-            var hostingApplicationContext = (HostingApplicationContext)context;
-            var httpContext = hostingApplicationContext.HttpContext;
+            var httpContext = context.HttpContext;
             httpContext.ApplicationServices = _applicationServices;
             try
             {
@@ -101,6 +94,13 @@ namespace Microsoft.AspNet.Hosting.Internal
             {
                 httpContext.ApplicationServices = null;
             }
+        }
+
+        public struct Context
+        {
+            public HttpContext HttpContext { get; set; }
+            public IDisposable Scope { get; set; }
+            public int StartTick { get; set; }
         }
     }
 }

@@ -14,7 +14,6 @@ using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Hosting.Startup;
 using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Features;
-using Microsoft.AspNet.Http.Internal;
 using Microsoft.AspNet.Server.Features;
 using Microsoft.AspNet.Testing.xunit;
 using Microsoft.Extensions.Configuration;
@@ -457,21 +456,21 @@ namespace Microsoft.AspNet.Hosting
             return new WebHostBuilder(config ?? new ConfigurationBuilder().Build());
         }
 
-        public void Start(IHttpApplication app)
+        public void Start<THttpContext>(IHttpApplication<THttpContext> application)
         {
             var startInstance = new StartInstance();
             _startInstances.Add(startInstance);
-            var context = app.CreateContext(Features);
+            var context = application.CreateContext(Features);
             try
             {
-                app.ProcessRequestAsync(context);
+                application.ProcessRequestAsync(context);
             }
             catch (Exception ex)
             {
-                app.DisposeContext(context, ex);
+                application.DisposeContext(context, ex);
                 throw;
             }
-            app.DisposeContext(context);
+            application.DisposeContext(context, null);
         }
 
         public void Dispose()

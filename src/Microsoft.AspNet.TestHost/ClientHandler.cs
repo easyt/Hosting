@@ -11,10 +11,10 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNet.Hosting.Internal;
 using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Features;
+using Context = Microsoft.AspNet.Hosting.Internal.HostingApplication.Context;
 
 namespace Microsoft.AspNet.TestHost
 {
@@ -24,15 +24,15 @@ namespace Microsoft.AspNet.TestHost
     /// </summary>
     public class ClientHandler : HttpMessageHandler
     {
-        private readonly Func<object, Task> _next;
-        private readonly IHttpApplication _application;
+        private readonly Func<Context, Task> _next;
+        private readonly IHttpApplication<Context> _application;
         private readonly PathString _pathBase;
 
         /// <summary>
         /// Create a new handler.
         /// </summary>
         /// <param name="next">The pipeline entry point.</param>
-        public ClientHandler(Func<object, Task> next, PathString pathBase, IHttpApplication application)
+        public ClientHandler(Func<Context, Task> next, PathString pathBase, IHttpApplication<Context> application)
         {
             if (next == null)
             {
@@ -78,7 +78,7 @@ namespace Microsoft.AspNet.TestHost
                 // This body may have been consumed before, rewind it.
                 body.Seek(0, SeekOrigin.Begin);
             }
-            state.HostingApplicationContext.HttpContext.Request.Body = body;
+            state.Context.HttpContext.Request.Body = body;
             var registration = cancellationToken.Register(state.AbortRequest);
 
             // Async offload, don't let the test code block the caller.
@@ -86,8 +86,8 @@ namespace Microsoft.AspNet.TestHost
                 {
                     try
                     {
-                        await _next(state.HostingApplicationContext);
-                        state.ServerCleanup();
+                        await _next(state.Context);
+                        state.ServerCleanup(null);
                         state.CompleteResponse();
                     }
                     catch (Exception ex)
@@ -107,14 +107,14 @@ namespace Microsoft.AspNet.TestHost
         private class RequestState
         {
             private readonly HttpRequestMessage _request;
-            private readonly IHttpApplication _application;
+            private readonly IHttpApplication<Context> _application;
             private TaskCompletionSource<HttpResponseMessage> _responseTcs;
             private ResponseStream _responseStream;
             private ResponseFeature _responseFeature;
             private CancellationTokenSource _requestAbortedSource;
             private bool _pipelineFinished;
 
-            internal RequestState(HttpRequestMessage request, PathString pathBase, IHttpApplication application)
+            internal RequestState(HttpRequestMessage request, PathString pathBase, IHttpApplication<Context> application)
             {
                 _request = request;
                 _application = application;
@@ -131,8 +131,8 @@ namespace Microsoft.AspNet.TestHost
                     request.Headers.Host = request.RequestUri.GetComponents(UriComponents.HostAndPort, UriFormat.UriEscaped);
                 }
 
-                HostingApplicationContext = (HostingApplicationContext)application.CreateContext(new FeatureCollection());
-                var httpContext = HostingApplicationContext.HttpContext;
+                Context = application.CreateContext(new FeatureCollection());
+                var httpContext = Context.HttpContext;
 
                 httpContext.Features.Set<IHttpRequestFeature>(new RequestFeature());
                 _responseFeature = new ResponseFeature();
@@ -176,7 +176,7 @@ namespace Microsoft.AspNet.TestHost
                 httpContext.RequestAborted = _requestAbortedSource.Token;
             }
 
-            public HostingApplicationContext HostingApplicationContext { get; private set; }
+            public Context Context { get; private set; }
 
             public Task<HttpResponseMessage> ResponseTask
             {
@@ -215,7 +215,7 @@ namespace Microsoft.AspNet.TestHost
             private HttpResponseMessage GenerateResponse()
             {
                 _responseFeature.FireOnSendingHeaders();
-                var httpContext = HostingApplicationContext.HttpContext;
+                var httpContext = Context.HttpContext;
 
                 var response = new HttpResponseMessage();
                 response.StatusCode = (HttpStatusCode)httpContext.Response.StatusCode;
@@ -243,16 +243,11 @@ namespace Microsoft.AspNet.TestHost
                 _responseTcs.TrySetException(exception);
             }
 
-            internal void ServerCleanup()
-            {
-                ServerCleanup(exception: null);
-            }
-
             internal void ServerCleanup(Exception exception)
             {
-                if (HostingApplicationContext != null)
+                if (Context.HttpContext != null)
                 {
-                    _application.DisposeContext(HostingApplicationContext, exception);
+                    _application.DisposeContext(Context, exception);
                 }
             }
         }

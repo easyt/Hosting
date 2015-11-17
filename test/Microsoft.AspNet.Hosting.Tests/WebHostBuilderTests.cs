@@ -175,21 +175,21 @@ namespace Microsoft.AspNet.Hosting
 
             }
 
-            public void Start(IHttpApplication app)
+            public void Start<THttpContext>(IHttpApplication<THttpContext> application)
             {
                 RequestDelegate = async ctx =>
                 {
-                    var httpContext = app.CreateContext(ctx.Features);
+                    var httpContext = application.CreateContext(ctx.Features);
                     try
                     {
-                        await app.ProcessRequestAsync(httpContext);
+                        await application.ProcessRequestAsync(httpContext);
                     }
                     catch (Exception ex)
                     {
-                        app.DisposeContext(httpContext, ex);
+                        application.DisposeContext(httpContext, ex);
                         throw;
                     }
-                    app.DisposeContext(httpContext);
+                    application.DisposeContext(httpContext, null);
                 };
             }
         }

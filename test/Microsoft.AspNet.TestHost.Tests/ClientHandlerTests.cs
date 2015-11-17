@@ -7,13 +7,13 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNet.Hosting.Internal;
 using Microsoft.AspNet.Hosting.Server;
 using Microsoft.AspNet.Http;
 using Microsoft.AspNet.Http.Internal;
 using Microsoft.AspNet.Http.Features;
 using Microsoft.AspNet.Testing.xunit;
 using Xunit;
+using Context = Microsoft.AspNet.Hosting.Internal.HostingApplication.Context;
 
 namespace Microsoft.AspNet.TestHost
 {
@@ -26,7 +26,7 @@ namespace Microsoft.AspNet.TestHost
         {
             var handler = new ClientHandler(hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 // TODO: Assert.True(context.RequestAborted.CanBeCanceled);
                 Assert.Equal("HTTP/1.1", context.Request.Protocol);
                 Assert.Equal("GET", context.Request.Method);
@@ -53,7 +53,7 @@ namespace Microsoft.AspNet.TestHost
         {
             var handler = new ClientHandler(hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 Assert.Equal("", context.Request.PathBase.Value);
                 Assert.Equal("/", context.Request.Path.Value);
 
@@ -69,7 +69,7 @@ namespace Microsoft.AspNet.TestHost
             int requestCount = 1;
             var handler = new ClientHandler(hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 int read = context.Request.Body.Read(new byte[100], 0, 100);
                 Assert.Equal(11, read);
 
@@ -93,7 +93,7 @@ namespace Microsoft.AspNet.TestHost
         {
             var handler = new ClientHandler(hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 return Task.FromResult(0);
             }, PathString.Empty, new DummyApplication());
@@ -125,7 +125,7 @@ namespace Microsoft.AspNet.TestHost
             ManualResetEvent block = new ManualResetEvent(false);
             var handler = new ClientHandler(async hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 await context.Response.WriteAsync("BodyStarted,");
                 block.WaitOne();
@@ -145,7 +145,7 @@ namespace Microsoft.AspNet.TestHost
             ManualResetEvent block = new ManualResetEvent(false);
             var handler = new ClientHandler(async hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 context.Response.Body.Flush();
                 block.WaitOne();
@@ -165,7 +165,7 @@ namespace Microsoft.AspNet.TestHost
             ManualResetEvent block = new ManualResetEvent(false);
             var handler = new ClientHandler(hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 context.Response.Body.Flush();
                 block.WaitOne();
@@ -191,7 +191,7 @@ namespace Microsoft.AspNet.TestHost
             ManualResetEvent block = new ManualResetEvent(false);
             var handler = new ClientHandler(hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 context.Response.Body.Flush();
                 block.WaitOne();
@@ -231,7 +231,7 @@ namespace Microsoft.AspNet.TestHost
             ManualResetEvent block = new ManualResetEvent(false);
             var handler = new ClientHandler(async hostingApplicationContext =>
             {
-                var context = ((HostingApplicationContext)hostingApplicationContext).HttpContext;
+                var context = hostingApplicationContext.HttpContext;
                 context.Response.Headers["TestHeader"] = "TestValue";
                 await context.Response.WriteAsync("BodyStarted");
                 block.WaitOne();
@@ -246,29 +246,23 @@ namespace Microsoft.AspNet.TestHost
             Assert.IsType<InvalidOperationException>(ex.GetBaseException());
         }
 
-        private class DummyApplication : IHttpApplication
+        private class DummyApplication : IHttpApplication<Context>
         {
             private readonly IHttpContextFactory _httpContextFactory = new HttpContextFactory(new HttpContextAccessor());
-            public object CreateContext(IFeatureCollection contextFeatures)
+            public Context CreateContext(IFeatureCollection contextFeatures)
             {
-                return new HostingApplicationContext()
+                return new Context()
                 {
                     HttpContext = _httpContextFactory.Create(contextFeatures)
                 };
             }
 
-            public void DisposeContext(object context)
+            public void DisposeContext(Context context, Exception exception)
             {
-                DisposeContext(context, null);
+                _httpContextFactory.Dispose(context.HttpContext);
             }
 
-            public void DisposeContext(object context, Exception exception)
-            {
-                var httpContext = ((HostingApplicationContext)context).HttpContext;
-                _httpContextFactory.Dispose(httpContext);
-            }
-
-            public Task ProcessRequestAsync(object context)
+            public Task ProcessRequestAsync(Context context)
             {
                 return Task.FromResult(0);
             }
